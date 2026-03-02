@@ -10,21 +10,23 @@ public class cursor {
     public TextMouseListener tmlis;
     public KeyListener klis;
 
-    // ------ Standard variables for mouse and keyboard ------
     public int mousepr;
     public int mousex, mousey;
     public int keypr;
     public int rkey;
-    // ----------------------------------------------------
+
+    // ---- Player positions ----
+    public static int ax, ay;  // A position
+    public static int bx, by;  // B position
+    public static int mode = 1; // 1 = same direction, -1 = opposite
 
     public cursor(enigma.console.Console console) throws Exception {
 
         cn = console;
 
-        // ------ Mouse ------
+        // ------ Mouse Setup ------
         tmlis = new TextMouseListener() {
             public void mouseClicked(TextMouseEvent arg0) {}
-
             public void mousePressed(TextMouseEvent arg0) {
                 if (mousepr == 0) {
                     mousepr = 1;
@@ -32,222 +34,237 @@ public class cursor {
                     mousey = arg0.getY();
                 }
             }
-
             public void mouseReleased(TextMouseEvent arg0) {}
         };
         cn.getTextWindow().addTextMouseListener(tmlis);
 
-        // ------ Keyboard ------
+        // ------ Keyboard Setup ------
         klis = new KeyListener() {
             public void keyTyped(KeyEvent e) {}
-
             public void keyPressed(KeyEvent e) {
                 if (keypr == 0) {
                     keypr = 1;
                     rkey = e.getKeyCode();
                 }
             }
-
             public void keyReleased(KeyEvent e) {}
         };
         cn.getTextWindow().addKeyListener(klis);
 
-        // =============================================
-        // PLAYER A POSITION - find an empty spot
-        // =============================================
-        int ax = 5, ay = 5;
-        boolean flag = false;
+        // ---- Find empty spot for A ----
+        ax = 5;
+        ay = 5;
+        while (Maze.maze[ay][ax] != ' ') {
+            ax++;
+            if (ax >= 51) { ax = 1; ay++; }
+        }
 
-        while (!flag) {
-            if (Maze.maze[ay][ax] != ' ') {
-                ay++;
-                ax++;
-            } else {
-                flag = true;
+        // ---- B starts 3 squares to the right of A ----
+        // We look for the nearest empty square near A for B
+        bx = ax;
+        by = ay;
+        // search right, then left, then down, then up for an empty spot
+        boolean bPlaced = false;
+        for (int dist = 1; dist < 10 && !bPlaced; dist++) {
+            if (ax + dist < 52 && Maze.maze[ay][ax + dist] == ' ') {
+                bx = ax + dist; by = ay; bPlaced = true;
+            } else if (ax - dist > 0 && Maze.maze[ay][ax - dist] == ' ') {
+                bx = ax - dist; by = ay; bPlaced = true;
+            } else if (ay + dist < 22 && Maze.maze[ay + dist][ax] == ' ') {
+                bx = ax; by = ay + dist; bPlaced = true;
+            } else if (ay - dist > 0 && Maze.maze[ay - dist][ax] == ' ') {
+                bx = ax; by = ay - dist; bPlaced = true;
             }
         }
 
-        // =============================================
-        // PLAYER B POSITION
-        // B starts at the same square as A (twins joined)
-        // mode = 1 means B moves in same direction as A
-        // mode = -1 means B moves in opposite direction
-        // =============================================
-        int bx = ax;
-        int by = ay;
-        int mode = 1; // 1 = same direction, -1 = opposite direction
-
-        // Draw A on the screen (B is hidden because they are joined)
+        // ---- Draw A and B ----
         Maze.maze[ay][ax] = 'A';
         cn.getTextWindow().output(ax, ay, 'A');
 
-        // =============================================
-        // PUT SOME TEST LASERS ON THE MAP
-        // So you can see that picking up works.
-        // (Later the Game Input System will do this)
-        // =============================================
-        Maze.maze[3][3] = '@';
-        cn.getTextWindow().output(3, 3, '@');
-        Maze.maze[5][10] = '@';
-        cn.getTextWindow().output(10, 5, '@');
-        Maze.maze[7][15] = '@';
-        cn.getTextWindow().output(15, 7, '@');
+        if (bx != ax || by != ay) {
+            Maze.maze[by][bx] = 'B';
+            cn.getTextWindow().output(bx, by, 'B');
+        }
 
-        // =============================================
-        // SCORE DISPLAY AREA (right side of maze)
-        // =============================================
-        int infoX = 55; // column where info text starts
+        // ---- Test: put some @ on the map ----
+        putTestItem(3, 5, '@');
+        putTestItem(7, 10, '@');
+        putTestItem(10, 15, '@');
 
-        // =============================================
+        // ---- Info column ----
+        int infoX = 55;
+
+        // ==========================================
         // MAIN GAME LOOP
-        // =============================================
+        // ==========================================
         while (true) {
 
-            // -----------------------------------------
-            // KEYBOARD INPUT
-            // -----------------------------------------
             if (keypr == 1) {
 
-                // --- SPACE KEY: FIRE LASER ---
                 if (rkey == KeyEvent.VK_SPACE) {
-
-                    // Fire laser from A to B
-                    // Only works if A and B are NOT on the same square
+                    // ---- SPACE: fire laser from A to B ----
                     if (ax != bx || ay != by) {
-                        Lasers.fireLaser(ax, ay, bx, by);
+                        Laser.fireLaser(ax, ay, bx, by);
                     }
+
+                } else if (rkey == KeyEvent.VK_M) {
+                    // ---- M KEY: toggle mode ----
+                    // mode 1 -> -1, mode -1 -> 1
+                    mode = mode * -1;
 
                 } else {
+                    // ---- ARROW KEYS ----
+                    int dirX = 0;
+                    int dirY = 0;
+                    if (rkey == KeyEvent.VK_LEFT)  dirX = -1;
+                    if (rkey == KeyEvent.VK_RIGHT) dirX = 1;
+                    if (rkey == KeyEvent.VK_UP)    dirY = -1;
+                    if (rkey == KeyEvent.VK_DOWN)  dirY = 1;
 
-                    // --- ARROW KEYS: MOVE PLAYER ---
-
-                    // Calculate where A wants to go
-                    int newAX = ax;
-                    int newAY = ay;
-
-                    if (rkey == KeyEvent.VK_LEFT)  newAX--;
-                    if (rkey == KeyEvent.VK_RIGHT) newAX++;
-                    if (rkey == KeyEvent.VK_UP)    newAY--;
-                    if (rkey == KeyEvent.VK_DOWN)  newAY++;
-
-                    // Calculate where B wants to go
-                    // mode=1: same direction as A
-                    // mode=-1: opposite direction of A
-                    int newBX = bx;
-                    int newBY = by;
-
-                    if (rkey == KeyEvent.VK_LEFT)  newBX = bx + (-1 * mode);
-                    if (rkey == KeyEvent.VK_RIGHT) newBX = bx + (1 * mode);
-                    if (rkey == KeyEvent.VK_UP)    newBY = by + (-1 * mode);
-                    if (rkey == KeyEvent.VK_DOWN)  newBY = by + (1 * mode);
-
-                    // ---- MOVE A ----
-                    // Check: is the new position inside the maze?
-                    // Check: is the new position not a wall?
-                    if (newAY >= 0 && newAY < Maze.MazeX &&
-                            newAX >= 0 && newAX < Maze.maze[0].length) {
-
-                        char cellA = Maze.maze[newAY][newAX];
-
-                        // A can move to empty space, or pick up @ or treasures
-                        if (cellA == ' ' || cellA == '@' ||
-                                cellA == '1' || cellA == '2' || cellA == '3') {
-
-                            // --- PICK UP PACKED LASER (@) ---
-                            if (cellA == '@') {
-                                Lasers.collectPacked(newAX, newAY);
-                            }
-
-                            // Erase A from old position
-                            // If B is at the same spot, show B. Otherwise show empty.
-                            if (bx == ax && by == ay) {
-                                // B was hidden under A, now B appears
-                                Maze.maze[ay][ax] = 'B';
-                                cn.getTextWindow().output(ax, ay, 'B');
-                            } else {
-                                Maze.maze[ay][ax] = ' ';
-                                cn.getTextWindow().output(ax, ay, ' ');
-                            }
-
-                            // Move A to new position
-                            ax = newAX;
-                            ay = newAY;
-
-                            // If A lands on B's square, only show A
-                            if (ax == bx && ay == by) {
-                                Maze.maze[ay][ax] = 'A';
-                                cn.getTextWindow().output(ax, ay, 'A');
-                            } else {
-                                Maze.maze[ay][ax] = 'A';
-                                cn.getTextWindow().output(ax, ay, 'A');
-                            }
-                        }
-                    }
-
-                    // ---- MOVE B ----
-                    if (newBY >= 0 && newBY < Maze.MazeX &&
-                            newBX >= 0 && newBX < Maze.maze[0].length) {
-
-                        char cellB = Maze.maze[newBY][newBX];
-
-                        if (cellB == ' ' || cellB == '@' ||
-                                cellB == '1' || cellB == '2' || cellB == '3') {
-
-                            // --- PICK UP PACKED LASER (@) ---
-                            if (cellB == '@') {
-                                Lasers.collectPacked(newBX, newBY);
-                            }
-
-                            // Erase B from old position (only if A is not there)
-                            if (!(bx == ax && by == ay)) {
-                                Maze.maze[by][bx] = ' ';
-                                cn.getTextWindow().output(bx, by, ' ');
-                            }
-
-                            // Move B to new position
-                            bx = newBX;
-                            by = newBY;
-
-                            // If B lands on A's square, only show A
-                            if (bx == ax && by == ay) {
-                                // A is already displayed, do nothing
-                            } else {
-                                Maze.maze[by][bx] = 'B';
-                                cn.getTextWindow().output(bx, by, 'B');
-                            }
-                        }
+                    if (dirX != 0 || dirY != 0) {
+                        movePlayers(dirX, dirY);
                     }
                 }
 
                 keypr = 0;
             }
 
-            // -----------------------------------------
-            // LASER UPDATES (runs every time unit)
-            // -----------------------------------------
+            // ---- LASER UPDATES (every tick) ----
+            Laser.updateLaserSpread(cn);
+            Laser.updateLifetimes(cn);
 
-            // Spread the next '+' block (if laser is firing)
-            Lasers.updateLaserSpread(cn);
+            // ---- SHOW INFO ----
+            printInfo(infoX, 3, "P.Laser : " + Laser.packedLaserCount);
+            printInfo(infoX, 4, "Mode    : " + (mode == 1 ? "SAME" : "OPPOSITE"));
 
-            // Decrease lifetime of all '+' blocks, remove dead ones
-            Lasers.updateLifetimes(cn);
-
-            // Check if any robots are next to '+' blocks
-            // (You'll use this when you add robots later)
-            // int[][] hits = Laser.harmRobots();
-
-            // -----------------------------------------
-            // DISPLAY INFO (right side of screen)
-            // -----------------------------------------
-            String laserInfo = "P.Laser : " + Lasers.packedLaserCount + "   ";
-            for (int c = 0; c < laserInfo.length(); c++) {
-                cn.getTextWindow().output(infoX + c, 5, laserInfo.charAt(c));
-            }
-
-            // -----------------------------------------
-            // SLEEP - 50ms = 1 time unit
-            // -----------------------------------------
+            // ---- 50ms = 1 time unit ----
             Thread.sleep(50);
+        }
+    }
+
+    // ==========================================================
+    // movePlayers: moves A and B based on direction and mode
+    // ==========================================================
+    public void movePlayers(int dirX, int dirY) {
+
+        // ---- where A wants to go ----
+        int newAX = ax + dirX;
+        int newAY = ay + dirY;
+
+        // ---- where B wants to go (depends on mode) ----
+        int newBX = bx + (dirX * mode);
+        int newBY = by + (dirY * mode);
+
+        // ---- check if A can move there ----
+        boolean aOk = canMove(newAX, newAY);
+        // A can also step on B's current square
+        if (newAX == bx && newAY == by) aOk = true;
+
+        // ---- check if B can move there ----
+        boolean bOk = canMove(newBX, newBY);
+        // B can also step on A's current square
+        if (newBX == ax && newBY == ay) bOk = true;
+
+        // ---- IMPORTANT: if both are going to the same NEW square ----
+        // both can go there (they overlap, only A is shown)
+
+        // ==== ERASE OLD POSITIONS ====
+        // save what's under them (nothing, it's always empty after they leave)
+
+        boolean sameSpot = (ax == bx && ay == by);
+
+        if (sameSpot) {
+            // both on same square right now
+            if (aOk || bOk) {
+                Maze.maze[ay][ax] = ' ';
+                cn.getTextWindow().output(ax, ay, ' ');
+            }
+        } else {
+            // on different squares
+            if (aOk) {
+                Maze.maze[ay][ax] = ' ';
+                cn.getTextWindow().output(ax, ay, ' ');
+            }
+            if (bOk) {
+                Maze.maze[by][bx] = ' ';
+                cn.getTextWindow().output(bx, by, ' ');
+            }
+        }
+
+        // ==== PICK UP ITEMS AND MOVE ====
+
+        if (aOk) {
+            char target = Maze.maze[newAY][newAX];
+            if (target == '@') Laser.collectPacked(newAX, newAY);
+            // if target is B, don't erase B from maze (B is moving too)
+            ax = newAX;
+            ay = newAY;
+        }
+
+        if (bOk) {
+            char target = Maze.maze[newBY][newBX];
+            if (target == '@') Laser.collectPacked(newBX, newBY);
+            bx = newBX;
+            by = newBY;
+        }
+
+        // ==== DRAW NEW POSITIONS ====
+
+        if (ax == bx && ay == by) {
+            // same square -> only A is shown
+            Maze.maze[ay][ax] = 'A';
+            cn.getTextWindow().output(ax, ay, 'A');
+        } else {
+            // different squares -> draw B first, then A
+            Maze.maze[by][bx] = 'B';
+            cn.getTextWindow().output(bx, by, 'B');
+            Maze.maze[ay][ax] = 'A';
+            cn.getTextWindow().output(ax, ay, 'A');
+        }
+    }
+
+    // ==========================================================
+    // canMove: checks if a square is walkable
+    // ==========================================================
+    public boolean canMove(int x, int y) {
+        // check if inside the maze (not on the border walls)
+        if (y <= 0 || y >= 22 || x <= 0 || x >= 52) return false;
+
+        char cell = Maze.maze[y][x];
+
+        // walkable: empty, packed laser, treasures
+        if (cell == ' ') return true;
+        if (cell == '@') return true;
+        if (cell == '1') return true;
+        if (cell == '2') return true;
+        if (cell == '3') return true;
+
+        // A and B can walk onto each other
+        if (cell == 'A') return true;
+        if (cell == 'B') return true;
+
+        // walls (#) and everything else -> blocked
+        return false;
+    }
+
+    // ==========================================================
+    // putTestItem: puts a test item on the maze if spot is empty
+    // ==========================================================
+    public void putTestItem(int row, int col, char item) {
+        if (Maze.maze[row][col] == ' ') {
+            Maze.maze[row][col] = item;
+            cn.getTextWindow().output(col, row, item);
+        }
+    }
+
+    // ==========================================================
+    // printInfo: prints a string on the right side of the screen
+    // ==========================================================
+    public void printInfo(int startX, int row, String text) {
+        // add spaces at the end to clear old text
+        String padded = text + "          ";
+        for (int i = 0; i < padded.length() && startX + i < 80; i++) {
+            cn.getTextWindow().output(startX + i, row, padded.charAt(i));
         }
     }
 }
